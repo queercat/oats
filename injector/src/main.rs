@@ -18,7 +18,10 @@ use windows::{
             },
             LibraryLoader::{GetModuleHandleA, GetModuleHandleW, GetProcAddress},
             Memory::{MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE, VirtualAllocEx, VirtualFreeEx},
-            Threading::{CreateRemoteThread, OpenProcess, PROCESS_ALL_ACCESS, WaitForSingleObject, INFINITE},
+            Threading::{
+                CreateRemoteThread, GetExitCodeThread, OpenProcess, PROCESS_ALL_ACCESS,
+                WaitForSingleObject, INFINITE,
+            },
         },
     },
     core::{PCSTR, PCWSTR},
@@ -97,6 +100,15 @@ fn inject_dll(pid: u32, dll_path: String) -> anyhow::Result<()> {
         }
 
         WaitForSingleObject(remote_thread, INFINITE);
+
+        let mut exit_code: u32 = 0;
+        GetExitCodeThread(remote_thread, &mut exit_code)?;
+        if exit_code == 0 {
+            Err(anyhow!(
+                "LoadLibraryA returned NULL in the target process DLL failed to load (check bitness and path)"
+            ))?;
+        }
+
         VirtualFreeEx(remote_process, path, 0, MEM_RELEASE)?;
         CloseHandle(remote_thread)?;
         CloseHandle(remote_process)?;
@@ -106,8 +118,12 @@ fn inject_dll(pid: u32, dll_path: String) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let pid = get_pid("notepad.exe".to_string()).ok_or(anyhow!("Couldn't find PID."))?;
-    inject_dll(pid, "C:\\Users\\Moon\\Documents\\GitHub\\oats\\target\\debug\\injected.dll".to_string())?;
+    let pid = get_pid("ac_client.exe".to_string()).ok_or(anyhow!("Couldn't find PID."))?;
+    inject_dll(
+        pid,
+        "C:\\Users\\Moon\\Documents\\GitHub\\oats\\target\\i686-pc-windows-msvc\\debug\\injected.dll"
+            .to_string(),
+    )?;
     
     Ok(())
 }
